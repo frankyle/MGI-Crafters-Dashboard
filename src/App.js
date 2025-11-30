@@ -14,6 +14,7 @@ import NotFound from "./pages/NotFound";
 import { Toaster, toast } from "react-hot-toast";
 import SignUp from "./components/authentication/SignUp";
 import SignIn from "./components/authentication/SignIn";
+import SalesDashboardPage from "./pages/sales/SalesDashboardPage";
 
 const pageVariants = {
   initial: { opacity: 0, y: 20 },
@@ -43,6 +44,7 @@ function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/expenses" element={<Expenses />} />
           <Route path="/sales" element={<Sales />} />
+          <Route path="/dashboard/SalesDashboard" element={<SalesDashboardPage />} />
           <Route path="/inventory" element={<Inventory />} />
           <Route path="/production" element={<Production />} />
           <Route path="/signup" element={<SignUp />} />
