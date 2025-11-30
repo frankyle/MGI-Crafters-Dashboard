@@ -1,88 +1,107 @@
-// Inventory.js
-import React, { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Plus } from "lucide-react";
-import AddItemForm from "./inventory/AddItemModal";
+import React, { useState, useEffect } from "react";
+import { Toaster } from "react-hot-toast";
+import { supabase } from "../supabaseClient";
+import InventoryHeader from "./inventory/InventoryHeader";
 import InventoryTabs from "./inventory/InventoryTabs";
-import RawMaterialsTable from "./inventory/RawMaterialTable";
-import FinishedGoodsTable from "./inventory/FinishedGoodsTable";
+import InventoryTable from "./inventory/InventoryTable";
+import AddEditItemModal from "./inventory/AddEditItemModal";
 
+// Assuming these components exist in your structure
 
-const Inventory = () => {
+const InventoryPage = () => {
   const [activeTab, setActiveTab] = useState("raw");
-  const [showForm, setShowForm] = useState(false);
+  const [rawMaterials, setRawMaterials] = useState([]);
+  const [finishedGoods, setFinishedGoods] = useState([]);
+  
+  // Modal State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
+  
+  const [loading, setLoading] = useState(true);
 
-  const [rawMaterials, setRawMaterials] = useState([
-    { id: 1, name: "Fresh Moringa Leaves", quantity: 150, unit: "kg", reorderLevel: 50, status: "adequate" },
-    { id: 2, name: "Fresh Beetroot", quantity: 200, unit: "kg", reorderLevel: 80, status: "adequate" },
-  ]);
+  // Dynamic table name based on tab
+  const tableName = activeTab === "raw" ? "raw_materials" : "finished_goods";
 
-  const [finishedGoods, setFinishedGoods] = useState([
-    { id: 1, name: "Moringa Powder", quantity: 120, unit: "packets", reorderLevel: 30, status: "adequate" },
-    { id: 2, name: "Beetroot Powder", quantity: 85, unit: "packets", reorderLevel: 40, status: "adequate" },
-  ]);
+  const fetchInventory = async () => {
+    setLoading(true);
+    try {
+      const [rawRes, finishedRes] = await Promise.all([
+        supabase.from("raw_materials").select("*").order("created_at", { ascending: false }),
+        supabase.from("finished_goods").select("*").order("created_at", { ascending: false }),
+      ]);
 
-  const addNewItem = (item) => {
-    const newItem = {
-      id: Date.now(),
-      name: item.name,
-      quantity: Number(item.quantity),
-      unit: item.unit,
-      reorderLevel: Number(item.reorderLevel),
-      status: item.quantity <= item.reorderLevel ? "low" : "adequate"
-    };
+      if (rawRes.error) throw rawRes.error;
+      if (finishedRes.error) throw finishedRes.error;
 
-    if (item.type === "raw") {
-      setRawMaterials([...rawMaterials, newItem]);
-    } else {
-      setFinishedGoods([...finishedGoods, newItem]);
+      setRawMaterials(rawRes.data || []);
+      setFinishedGoods(finishedRes.data || []);
+    } catch (err) {
+      console.error("Fetch error:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
+  useEffect(() => {
+    fetchInventory();
+  }, []);
+
+  const openAddModal = () => {
+    setEditingItem(null);
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (item) => {
+    setEditingItem(item);
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditingItem(null);
+  };
+
   return (
-      <div>
-      <div className="space-y-8">
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto p-6 space-y-8">
         
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Inventory</h1>
-            <p className="text-gray-600">Track raw materials and finished goods</p>
-          </div>
+        {/* Toast Container */}
+        <Toaster position="top-right" />
 
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setShowForm(true)}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium px-5 py-3 rounded-lg shadow-md"
-          >
-            <Plus className="w-5 h-5" />
-            Add Item
-          </motion.button>
-        </div>
+        <InventoryHeader
+          rawMaterials={rawMaterials}
+          finishedGoods={finishedGoods}
+          openModal={openAddModal}
+        />
 
-        {/* Tabs */}
         <InventoryTabs activeTab={activeTab} setActiveTab={setActiveTab} />
 
-        {/* Tab Content */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <AnimatePresence mode="wait">
-            {activeTab === "raw" ? (
-              <motion.div key=" raw" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <RawMaterialsTable data={rawMaterials} />
-              </motion.div>
-            ) : (
-              <motion.div key="finished" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <FinishedGoodsTable data={finishedGoods} />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </div>
+        {loading ? (
+          <div className="text-center py-12">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-4 border-blue-600"></div>
+          </div>
+        ) : (
+          <InventoryTable
+            // Ensure we pass the correct data based on the tab
+            data={activeTab === "raw" ? rawMaterials : finishedGoods}
+            tableName={tableName}
+            onRefresh={fetchInventory}
+            onEdit={openEditModal}
+          />
+        )}
 
-      {showForm && <AddItemForm onSubmit={addNewItem} onClose={() => setShowForm(false)} />}
+        <AddEditItemModal
+          isOpen={isModalOpen}
+          editingItem={editingItem}
+          tableName={tableName}
+          onClose={closeModal}
+          // The fix: onSave only fetches data. 
+          // Closing is handled by the modal calling onClose right after.
+          onSave={fetchInventory} 
+        />
       </div>
+    </div>
   );
 };
 
-export default Inventory;
+export default InventoryPage;
